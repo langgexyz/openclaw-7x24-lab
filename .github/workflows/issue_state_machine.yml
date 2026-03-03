@@ -1,0 +1,97 @@
+name: issue-state-machine
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  normalize_issue_labels:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - name: normalize stage labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const labels = issue.labels.map(l => l.name);
+            const stages = ['new','ready','in-dev','in-test','ready-merge','done','blocked'];
+            const active = stages.filter(s => labels.includes(s));
+
+            if (active.length <= 1) return;
+
+            const rank = {
+              'new': 1,
+              'ready': 2,
+              'in-dev': 3,
+              'in-test': 4,
+              'ready-merge': 5,
+              'done': 6,
+              'blocked': 99
+            };
+
+            active.sort((a,b) => rank[b] - rank[a]);
+            const keep = active[0];
+            const remove = active.slice(1);
+
+            for (const r of remove) {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: issue.number,
+                name: r
+              }).catch(() => {});
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: `state-machine normalized labels, kept: \`${keep}\``
+            });
+
+  close_linked_issue_on_merge:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: close linked issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pr = context.payload.pull_request;
+            const text = `${pr.title}\n${pr.body || ''}`;
+            const matches = [...text.matchAll(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/ig)];
+            const issueNumbers = [...new Set(matches.map(m => Number(m[1])))]
+              .filter(n => Number.isInteger(n) && n > 0);
+
+            for (const n of issueNumbers) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: n,
+                labels: ['done']
+              }).catch(() => {});
+
+              for (const stage of ['ready','in-dev','in-test','ready-merge','blocked','new']) {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: n, name: stage }).catch(() => {});
+              }
+
+              await github.rest.issues.update({ owner, repo, issue_number: n, state: 'closed' });
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: n,
+                body: `closed by merged PR #${pr.number}`
+              });
+            }

@@ -1,0 +1,11 @@
+[
+  {"name":"new","color":"D4C5F9","description":"New incoming request"},
+  {"name":"ready","color":"0E8A16","description":"Ready for dispatcher"},
+  {"name":"in-dev","color":"1D76DB","description":"Development in progress"},
+  {"name":"in-test","color":"FBCA04","description":"Testing in progress"},
+  {"name":"ready-merge","color":"5319E7","description":"Ready to merge"},
+  {"name":"done","color":"BFDADC","description":"Completed and merged"},
+  {"name":"blocked","color":"B60205","description":"Blocked by dependency or failure"},
+  {"name":"bug","color":"D73A4A","description":"Bug report"},
+  {"name":"feature","color":"A2EEEF","description":"Feature request"}
+]
