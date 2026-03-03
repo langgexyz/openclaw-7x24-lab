@@ -1,4 +1,4 @@
-# OpenClaw 7x24 全自动 Agent 交付流水线
+# 用 OpenClaw 搭建了一个 7x24 研发流水线
 
 > 技术分享 · 2026-03-03
 
@@ -204,29 +204,3 @@ ngrok http 18789
 - ✅ test agent 验收并自动合并
 - ✅ 冲突检测后路由回 dev agent rebase
 - ✅ commit 携带 agent + 模型身份信息
-
----
-
-## 关键设计决策
-
-**为什么不用轮询？**
-轮询在空闲时浪费 token，且引入并发竞争问题。状态机本身天然是锁（label 原子操作）。
-
-**为什么 AUTO_MERGE 单独一个消息类型？**
-测试和合并是两个不同的职责。分开让每个 session 专注一件事，失败时也更容易定位。
-
-**为什么冲突不走 blocked？**
-blocked 是"需要人脑判断"的状态。rebase 是纯机械操作，让 dev agent 自动处理，不应消耗人的注意力。
-
-**为什么共享 workspace + paths，而不是独立 workspace？**
-减少配置重复，AGENTS.md 通用规则只维护一份。角色文件通过 `bootstrap-extra-files` 按需加载，既继承通用规则，又保持职责隔离。
-
----
-
-## 下一步
-
-- [ ] 云端 Gateway 中继（替代 ngrok，固定域名）
-- [ ] cron job 兜底（每 30 分钟扫描遗漏的 ready issue）
-- [ ] blocked issue 定期通知
-- [ ] 多仓库支持（一套 agent 处理多个 repo）
-- [ ] test agent 支持运行真实 CI（调用 GitHub Actions workflow）
