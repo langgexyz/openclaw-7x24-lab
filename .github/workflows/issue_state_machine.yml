@@ -59,6 +59,47 @@ jobs:
               body: `state-machine normalized labels, kept: \`${keep}\``
             });
 
+  dispatch_agent:
+    if: |
+      github.event_name == 'issues' &&
+      (github.event.label.name == 'ready' || github.event.label.name == 'in-test')
+    runs-on: ubuntu-latest
+    steps:
+      - name: dispatch to openclaw agent
+        env:
+          OPENCLAW_HOOK_URL: ${{ secrets.OPENCLAW_HOOK_URL }}
+          OPENCLAW_HOOKS_TOKEN: ${{ secrets.OPENCLAW_HOOKS_TOKEN }}
+          LABEL: ${{ github.event.label.name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          if [ "$LABEL" = "ready" ]; then
+            AGENT="dev"
+            MSG="[AUTO_DISPATCH][ISSUE #${ISSUE_NUMBER}] ${ISSUE_TITLE}
+          URL: ${ISSUE_URL}
+          Task: implement requirement with atomic commits and open PR.
+          Issue body:
+          ${ISSUE_BODY}"
+          else
+            AGENT="test"
+            MSG="[AUTO_TEST][ISSUE #${ISSUE_NUMBER}] ${ISSUE_TITLE}
+          URL: ${ISSUE_URL}
+          Task: validate implementation for acceptance criteria and report pass/fail with evidence."
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg agentId "$AGENT" \
+            --arg message "$MSG" \
+            --arg wakeMode "now" \
+            '{agentId: $agentId, message: $message, wakeMode: $wakeMode}')
+
+          curl -sf -X POST "${OPENCLAW_HOOK_URL}/hooks/agent" \
+            -H "Authorization: Bearer ${OPENCLAW_HOOKS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
   close_linked_issue_on_merge:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
